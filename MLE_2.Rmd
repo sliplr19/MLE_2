@@ -1,0 +1,65 @@
+---
+title: "Homework_2"
+author: "Lindley Slipetz"
+date: "7/4/2021"
+output: pdf_document
+---
+
+For this homework assignment, I have decided to use the Psychological Classification of Adult Male Inmates in Federal Prison in Indiana, 1986-1988 dataset. I will be predicting suicidal tendencies from race, sense of self, SES, parent's disability status, optimism abut the future, and orientation towards relationships. Let's load the data!
+
+```{r load_data, warning = FALSE}
+library(haven)
+library(tidyverse)
+prison_all<-read_dta("C:\\Users\\Owner\\Documents\\ICPSR\\MLE\\HW_2\\02370-0001-Data.dta")
+```
+
+Now we're going to do some data cleaning. There are two variables for parents' disability status (mom and dad), so we're going to do some manipulation to make it one variable with three levels:
+
+0 = neither parent is disabled
+1 = one parent is disabled
+2 = both parents are disabled.
+
+```{r sz}
+prison_all <- prison_all %>%
+  mutate(mom_dis = ifelse(V140 == 1 | V140 == 2, 1, ifelse(V140 == 9 , NA, 0)))
+prison_all <- prison_all %>%
+  mutate(dad_dis = ifelse(V155 == 1 | V155 == 2, 1, ifelse(V155 == 9 , NA, 0)))
+prison_all <- prison_all %>% 
+  mutate(dis = case_when(
+    mom_dis == 0 & dad_dis == 0 ~ 0,
+    mom_dis == 1 & dad_dis == 0 ~ 1,
+    mom_dis == 0 & dad_dis == 1 ~ 1,
+    mom_dis == 1 & dad_dis == 1 ~ 2
+  ))
+```
+
+Just to make things easier on me, I'm going to subset to only the variables of interest. Then I'm going to rename them more intuitive names.
+
+```{r rename}
+prison <- prison_all %>%
+  select("V196", "RACE", "V107", "SES", "V266", "dis", "V21")
+oldnames = c("V196", "RACE", "V107", "SES", "V266", "dis", "V21")
+newnames = c("sui", "race", "self", "ses", "opt", "dis", "rel")
+prison <- prison %>% rename_at(vars(all_of(oldnames)), ~ newnames)
+```
+
+Now let's handle missing data. We'll tranform the numeric values into NA and then do an na.omit.
+
+```{r NA}
+prison$sui[prison$sui == 9] <- NA
+prison$race[prison$race == 9] <- NA
+prison$self[prison$self == 9] <- NA
+prison$ses[prison$ses == 9] <- NA
+prison$opt[prison$opt == 9] <- NA
+prison$rel[prison$rel == 9] <- NA
+prison_na <- na.omit(prison)
+```
+
+The data is now ready to go. We'll start with the linear probability model
+
+```{r reg}
+ols <- lm(prison$sui ~ prison$race + prison$self + prison$ses + prison$opt + prison$rel +prison$dis)
+summary(ols)
+```
+
+Well...none of the coefficients are significant and the adjusted $R^2$ is 0.01036 (or about 1% of the variance in suicidality is explained by the linear predictors). So...that's not good. Let's just hope this is a case of the linear probability model struggling with a binary variable.
