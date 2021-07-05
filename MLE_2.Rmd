@@ -55,11 +55,76 @@ prison$rel[prison$rel == 9] <- NA
 prison_na <- na.omit(prison)
 ```
 
-The data is now ready to go. We'll start with the linear probability model
+I need to recode the sui variable to zeros and ones.
+
+```{r recode_sui}
+prison_na <- prison_na %>% 
+  mutate(sui_bi = case_when(
+    sui == 1  ~ 0,
+    sui == 2 ~ 1,
+    
+  ))
+```
+
+The data is now ready to go. Let's look at some frequency tables.
+
+```{r freq}
+table(prison_na$sui_bi)
+table(prison_na$race)
+table(prison_na$self)
+table(prison_na$ses)
+table(prison_na$opt)
+table(prison_na$rel)
+table(prison_na$dis)
+```
+
+
+We'll start with the linear probability model
 
 ```{r reg}
-ols <- lm(prison$sui ~ prison$race + prison$self + prison$ses + prison$opt + prison$rel +prison$dis)
+ols <- lm(prison_na$sui_bi ~ prison_na$race + prison_na$self + prison_na$ses + prison_na$opt + prison_na$rel +prison_na$dis)
 summary(ols)
 ```
 
-Well...none of the coefficients are significant and the adjusted $R^2$ is 0.01036 (or about 1% of the variance in suicidality is explained by the linear predictors). So...that's not good. Let's just hope this is a case of the linear probability model struggling with a binary variable.
+Well...none of the coefficients are significant and the adjusted $R^2$ is 0.0321 (or about 3.21% of the variance in suicidality is explained by the linear predictors). So...that's not good. Let's just hope this is a case of the linear probability model struggling with a binary variable.
+
+# Logit model
+
+
+
+```{r logit}
+out1 <- glm(prison_na$sui_bi ~ prison_na$race + prison_na$self + prison_na$ses + prison_na$opt + prison_na$rel +prison_na$dis,
+            data = prison_na, family = binomial, x = TRUE)
+summary(out1)
+nullmod <- glm(prison_na$sui_bi ~ 1, family="binomial")
+1-logLik(out1)/logLik(nullmod)
+```
+
+Again we see no significant coefficients and a pseudo-$R^2$ (McFadden's) of 0.0583. Even though I haven't done the probit yet, we can safely say that this set of predictors does not do a good job of explaining the variance in suicidality.
+
+# Probit
+
+```{r probit}
+out2 <- glm(prison_na$sui_bi ~ prison_na$race + prison_na$self + prison_na$ses + prison_na$opt + prison_na$rel +prison_na$dis,
+            data = prison_na, family = binomial(link = 'probit'), x = TRUE)
+summary(out2)
+nullmod_2 <- glm(prison_na$sui_bi ~ 1, family="binomial")
+1-logLik(out1)/logLik(nullmod_2)
+```
+
+As expected, the probit also does not have significant coefficients and a pseudo-$R^2$ of 0.0583 (unsurprisingly the same as logit).
+
+```{r table, results='asis', header = FALSE}
+library(stargazer)
+#install.packages("devtools")
+#devtools::install_github("ChandlerLutz/starpolishr")
+library(starpolishr)
+star.out <- stargazer(out1, out2, ols)
+
+```
+
+When I tried to add the row "star_insert_row(star.out, "R^2 and Pseudo R^2 & 0.0583 & 0.0583 & 0.0321 \\\\", insert.after = 40)" I kept getting an error, so unfortunately the table doesn't include that. I think we've learned two things from these models. First, this set of predictors does a bad job in explaining the variance in suicidality. I have two ideas for how to fix it. Maybe we should use a rare events binary model because those that assent to suicidal ideation are rare in the sample. We could also choose better predictors. We also see that logit and probit are comparable, which is exactly what was expected.
+
+                                                                                             
+
+
